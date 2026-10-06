@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>冰島極光通</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+:root{--bg:#0e1a2b;--panel:#16263d;--line:#25405f;--text:#e8f1f2;--muted:#8ea3b5;--hi:#04FFB0;--mid:#19B4FF;--g1:#8095a9;--lo:#fbbf24;--no:#4b5d73}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.6 "Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif}
+main{max-width:860px;margin:0 auto;padding:20px 16px 48px}
+h1{font-size:1.4rem;margin:0 0 4px}
+h2{font-size:1.05rem;margin:28px 0 10px}
+.sub{color:var(--muted);margin:0 0 18px;font-size:.9rem}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+select,input,button{font:inherit;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px 12px}
+button{cursor:pointer}button:hover,button:focus-visible{border-color:var(--hi);outline:none}
+input{width:110px}
+.big{display:flex;align-items:baseline;gap:14px;margin:22px 0 4px}
+.big b{font-size:4.2rem;line-height:1;font-weight:700}
+.big span{font-size:1.2rem}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:14px 0}
+.fact{background:var(--panel);border-left:3px solid var(--line);padding:8px 12px;border-radius:4px}
+.fact small{display:block;color:var(--muted);font-size:.78rem}
+.chart{display:flex;gap:4px;align-items:flex-end;height:190px;background:var(--panel);padding:12px 10px 0;border-radius:10px;overflow-x:auto}
+.col{flex:1;min-width:38px;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%;font-size:.72rem;color:var(--muted)}
+.col .v{color:var(--text);font-size:.8rem;font-weight:600}
+.col .b{width:100%;border-radius:4px 4px 0 0;min-height:3px}
+.col .t{padding:4px 0 6px}
+.dayx{background:repeating-linear-gradient(45deg,#2b3b50,#2b3b50 4px,#223249 4px,#223249 8px)}
+table{width:100%;border-collapse:collapse;background:var(--panel);border-radius:10px;overflow:hidden;font-size:.92rem}
+th,td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--line)}
+th{color:var(--muted);font-weight:500}
+a{color:var(--hi)}
+.note{color:var(--muted);font-size:.84rem}
+.warn{color:var(--lo)}
+#status span{margin-right:12px;font-size:.82rem}
+.ok{color:var(--hi)}.bad{color:#f87171}
+.ver{font-size:.75rem;font-weight:500;color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:1px 7px;margin-left:8px;vertical-align:middle}
+#map{height:380px;border-radius:10px;margin:0 0 12px;background:var(--panel)}
+.pin{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font:700 11px system-ui,sans-serif;color:#0e1a2b;border:2px solid #fff;box-shadow:0 1px 4px #0008}
+.pin.best{box-shadow:0 0 0 4px #fff,0 1px 6px #000a}
+.pin.me{border-style:dashed;border-color:#0e1a2b}
+</style>
+</head>
+<body>
+<main>
+<h1>冰島極光通<span class="ver" id="ver"></span></h1>
+<p class="sub">即時串接 NOAA 極光預報與 Open-Meteo 雲量，只限冰島境內。時間為冰島時間（UTC）。</p>
+
+<div class="bar">
+  <select id="preset" aria-label="選擇地點"></select>
+  <button id="geo">使用我的位置</button>
+  <button id="go">重新整理</button>
+</div>
+<p id="status" class="note"></p>
+
+<div id="out" hidden>
+  <div class="big"><b id="p3">–</b><span id="p3l"></span></div>
+  <p class="note" id="p3d"></p>
+  <div class="facts" id="facts"></div>
+
+  <h2>未來 12 小時機率</h2>
+  <div class="chart" id="chart"></div>
+  <p class="note">斜紋＝天色太亮（太陽高度高於 −6°），幾乎看不到。柱下方為預測雲量。</p>
+
+  <h2>10 公里內極光機率最高的地點（未來 3 小時平均）</h2>
+  <div id="map"></div>
+  <table><thead><tr><th>方位</th><th>距離</th><th>機率</th><th>雲量</th><th>地圖</th></tr></thead><tbody id="spots"></tbody></table>
+  <p class="note" id="spotnote"></p>
+</div>
+
+<h2>算法與限制</h2>
+<p class="note">機率 ＝ 極光活動 × 晴空比例 × 天黑程度。極光活動取自 NOAA OVATION 即時極光模型、Kp 預報、太陽風 Bz（Bz 往南利於極光）。晴空比例用總雲量與低雲量加權。這是經驗式估算，並非校準過的統計機率。<br>
+<span class="warn">限制：</span>雲量模型解析度約數公里，10 公里內各點差異通常很小，實際請看冰島氣象局 <a href="https://en.vedur.is/weather/forecasts/aurora/" target="_blank" rel="noopener">vedur.is 極光與雲量圖</a>確認。此估算未計入月光與光害，離開城鎮燈光會更好。</p>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+const PLACES={"雷克雅維克":[64.147,-21.94],"辛格韋德利":[64.256,-21.13],"維克":[63.419,-19.006],"傑古沙龍冰河湖":[64.048,-16.179],"霍芬":[64.254,-15.209],"阿克雷里":[65.683,-18.1],"米湖":[65.6,-16.99],"胡薩維克":[66.045,-17.34],"斯奈山半島 斯蒂基斯霍爾米":[65.074,-22.73],"塞濟斯菲厄澤":[65.263,-14.0],"伊薩菲厄澤":[66.075,-23.135]};
+const $=id=>document.getElementById(id);
+const VERSION="V1.0.5";$("ver").textContent=VERSION;
+const sel=$("preset");
+Object.keys(PLACES).forEach(k=>sel.add(new Option(k,k)));
+let cur={lat:0,lon:0};
+function fillPreset(){const [a,b]=PLACES[sel.value];cur={lat:a,lon:b}}
+sel.onchange=()=>{fillPreset();run()};fillPreset();
+
+$("geo").onclick=()=>{
+  if(!navigator.geolocation){return msg("此瀏覽器不支援定位，請選擇地點。")}
+  navigator.geolocation.getCurrentPosition(p=>{
+    cur={lat:p.coords.latitude,lon:p.coords.longitude};run()},
+    ()=>msg("定位失敗（開啟本機檔案時部分瀏覽器會封鎖）。請選擇地點。"),{timeout:8000});
+};
+$("go").onclick=run;
+function msg(t){$("status").innerHTML='<span class="bad">'+t+'</span>'}
+
+const inIceland=(la,lo)=>la>=63.2&&la<=66.7&&lo>=-24.8&&lo<=-13.2;
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+function sunEl(date,lat,lon){const r=Math.PI/180,d=date.getTime()/864e5+2440587.5-2451545;
+  const g=(357.529+.98560028*d)*r,q=280.459+.98564736*d,L=(q+1.915*Math.sin(g)+.02*Math.sin(2*g))*r,e=(23.439-4e-7*d)*r;
+  const ra=Math.atan2(Math.cos(e)*Math.sin(L),Math.cos(L)),dec=Math.asin(Math.sin(e)*Math.sin(L));
+  const H=((280.46061837+360.98564736629*d)%360+lon)*r-ra;
+  return Math.asin(Math.sin(lat*r)*Math.sin(dec)+Math.cos(lat*r)*Math.cos(dec)*Math.cos(H))/r}
+const darkF=el=>clamp((-6-el)/6,0,1);
+const KPA=[.30,.42,.55,.68,.80,.90,.95,1,1,1];
+const hhmm=d=>d.toISOString().slice(11,16);
+const T=s=>new Date(String(s).replace(" ","T").replace(/Z?$/,"Z"));
+
+async function jget(u){const r=await fetch(u);if(!r.ok)throw new Error(r.status);return r.json()}
+
+let map=null,layer=null;
+function drawMap(all,lat,lon,lvl){
+  const el=$("map");
+  if(typeof L==="undefined"){el.style.display="none";return}
+  if(!map){map=L.map("map",{scrollWheelZoom:false});
+    let ok=false,sw=false;
+    const base=L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",{maxZoom:16,attribution:"Tiles © Esri, HERE, Garmin, © OpenStreetMap contributors"}).addTo(map);
+    base.on("tileload",()=>{ok=true});
+    base.on("tileerror",()=>{if(!ok&&!sw){sw=true;map.removeLayer(base);
+      L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:17,attribution:"© OpenStreetMap"}).addTo(map)}});
+    layer=L.layerGroup().addTo(map)}
+  layer.clearLayers();
+  L.circle([lat,lon],{radius:10000,color:"#3EFFDB",weight:1.5,fill:false}).addTo(layer);
+  L.circle([lat,lon],{radius:5000,color:"#3EFFDB",weight:1,dashArray:"4 6",fill:false}).addTo(layer);
+  all.forEach((q,i)=>{
+    const cls="pin"+(i===0?" best":"")+(q.d===0?" me":"");
+    const ic=L.divIcon({className:"",iconSize:[34,34],iconAnchor:[17,17],
+      html:'<div class="'+cls+'" style="background:'+lvl(Math.round(q.pf))[1]+'">'+Math.round(q.pf)+'</div>'});
+    L.marker([q.la,q.lo],{icon:ic}).addTo(layer).bindPopup(
+      "<b>"+(q.d?q.n+" "+q.d+" km":"你的位置")+"</b><br>極光機率 "+Math.round(q.pf)+"%<br>雲量 "+Math.round(q.c)+"%<br>"+
+      '<a target="_blank" rel="noopener" href="https://www.google.com/maps?q='+q.la.toFixed(4)+","+q.lo.toFixed(4)+'">在 Google 地圖開啟</a>');
+  });
+  const dla=11/111.2,dlo=11/(111.2*Math.cos(lat*Math.PI/180));
+  map.fitBounds([[lat-dla,lon-dlo],[lat+dla,lon+dlo]]);
+  setTimeout(()=>map.invalidateSize(),50);
+}
+
+async function run(){
+  const lat=cur.lat,lon=cur.lon;
+  if(!inIceland(lat,lon)){$("out").hidden=true;return msg("你目前的位置不在冰島，請從下拉選單選擇冰島地點。")}
+  $("status").textContent="讀取資料中…";
+  const st={};
+  // sample points
+  const pts=[{n:"中心",d:0,la:lat,lo:lon}];
+  const dirs=["北","東北","東","東南","南","西南","西","西北"];
+  [5,10].forEach(km=>dirs.forEach((nm,i)=>{const a=i*Math.PI/4;
+    pts.push({n:nm,d:km,la:lat+km*Math.cos(a)/111.2,lo:lon+km*Math.sin(a)/(111.2*Math.cos(lat*Math.PI/180))})}));
+  const [kpR,ovR,bzR,spR,wxR]=await Promise.allSettled([
+    jget("https://services.swpc.noaa.gov/products/noaa-planetary-k-index-forecast.json"),
+    jget("https://services.swpc.noaa.gov/json/ovation_aurora_latest.json"),
+    jget("https://services.swpc.noaa.gov/products/solar-wind/mag-1-day.json"),
+    jget("https://services.swpc.noaa.gov/products/solar-wind/plasma-1-day.json"),
+    jget("https://api.open-meteo.com/v1/forecast?latitude="+pts.map(p=>p.la.toFixed(4)).join(",")+"&longitude="+pts.map(p=>p.lo.toFixed(4)).join(",")+"&hourly=cloud_cover,cloud_cover_low&timezone=GMT&forecast_hours=14")
+  ]);
+  if(wxR.status!=="fulfilled"){return msg("無法取得雲量資料（Open-Meteo）。請確認網路，並用瀏覽器直接開啟本檔案。")}
+  st["雲量"]=1;
+
+  // Kp forecast -> [{t,kp}]
+  let kp=[];
+  if(kpR.status==="fulfilled"){const j=kpR.value;
+    kp=(Array.isArray(j[0])?j.slice(1).map(r=>({t:T(r[0]),kp:+r[1]})):j.map(r=>({t:T(r.time_tag),kp:+r.kp}))).filter(x=>isFinite(x.kp));st["Kp"]=1}
+  const kpAt=d=>{let k=null;kp.forEach(x=>{if(x.t<=d)k=x.kp});return k};
+
+  // OVATION nearest grid, per sample point
+  const ovC=ovR.status==="fulfilled"?(ovR.value.coordinates||[]):[];
+  const ovAt=(la,lo)=>{const LO=Math.round((lo+360)%360),LA=Math.round(la);
+    for(const e of ovC){const elo=Array.isArray(e)?e[0]:e.Longitude,ela=Array.isArray(e)?e[1]:e.Latitude;
+      if(elo===LO&&ela===LA)return +(Array.isArray(e)?e[2]:e.Aurora)}return null};
+  const ovs=pts.map(q=>ovAt(q.la,q.lo)),ov=ovs[0];
+  if(ov!==null)st["OVATION"]=1;
+
+  // solar wind
+  let bz=null,spd=null;
+  if(bzR.status==="fulfilled"){const rows=bzR.value.slice(1).filter(r=>isFinite(parseFloat(r[3])));if(rows.length){bz=parseFloat(rows[rows.length-1][3]);st["Bz"]=1}}
+  if(spR.status==="fulfilled"){const rows=spR.value.slice(1).filter(r=>isFinite(parseFloat(r[2])));if(rows.length)spd=parseFloat(rows[rows.length-1][2])}
+
+  // weather per point
+  const wx=Array.isArray(wxR.value)?wxR.value:[wxR.value];
+  const times=wx[0].hourly.time.map(t=>new Date(t+":00Z"));
+  const eff=(w,i)=>{const t=w.hourly.cloud_cover[i],l=w.hourly.cloud_cover_low[i];return clamp(.7*t+.3*l,0,100)};
+
+  const now=new Date();
+  const hp=(j,t,i)=>{const q=pts[j],k=kpAt(t);let A=k!==null?KPA[clamp(Math.round(k),0,9)]:.5;
+    A*=clamp(1-(65.5-q.la)*.07,.75,1);const dh=(t-now)/36e5,o=ovs[j];
+    if(dh<=1.5&&o!==null)A=.6*clamp(o/40,0,1)+.4*A;
+    if(dh<=2&&bz!==null)A=clamp(A+(bz<-5?.1:bz>5?-.1:0),0,1);
+    const el=sunEl(t,q.la,q.lo),df=darkF(el),cl=eff(wx[j],i),pf=Math.min(.95,A*(1-cl/100)*df)*100;
+    return {t,k,A,el,df,cl,pf,p:Math.round(pf)}};
+  const hours=[];
+  times.forEach((t,i)=>{if(t<new Date(now.getTime()-36e5)||hours.length>=12)return;hours.push(hp(0,t,i))});
+  if(!hours.length)return msg("沒有可用的預報時段，請稍後再試。");
+
+  // headline: next 3 hours avg
+  const h3=hours.slice(0,3),avg=Math.round(h3.reduce((s,h)=>s+h.p,0)/h3.length);
+  const lvl=p=>p>=90?["極高",'var(--lo)']:p>=75?["很高",'var(--hi)']:p>=50?["中",'var(--mid)']:["低",'var(--g1)'];
+  $("p3").textContent=avg+"%";$("p3").style.color=lvl(avg)[1];
+  $("p3l").textContent="未來 3 小時看見極光的機率：" + lvl(avg)[0];
+  const best=hours.reduce((a,b)=>b.p>a.p?b:a);
+  $("p3d").textContent="最佳時段約 "+hhmm(best.t)+"（"+best.p+"%）。"+(h3.every(h=>h.df===0)?"目前天色太亮，要等天黑。":"");
+
+  const f=(l,v)=>'<div class="fact"><small>'+l+'</small>'+v+'</div>';
+  const k0=kpAt(now);
+  $("facts").innerHTML=f("Kp 預報",k0!==null?k0.toFixed(1):"–")+f("OVATION 當地指數",ov!==null?ov+"%":"–")+
+    f("太陽風 Bz",bz!==null?bz.toFixed(1)+" nT"+(bz<-5?"（有利）":""):"–")+f("太陽風速度",spd!==null?Math.round(spd)+" km/s":"–")+
+    f("目前雲量（綜合）",Math.round(hours[0].cl)+"%");
+
+  $("chart").innerHTML=hours.map(h=>{const c=lvl(h.p)[1];
+    return '<div class="col"><span class="v">'+h.p+'%</span><div class="b'+(h.df===0?' dayx':'')+'" style="height:'+Math.max(h.p*1.15,3)+'px;'+(h.df===0?'':'background:'+c)+'"></div><span class="t">'+hhmm(h.t)+'<br>☁'+Math.round(h.cl)+'</span></div>'}).join("");
+
+  // nearby spots ranked by aurora probability (3h avg)
+  const idx=hours.slice(0,3).map(h=>times.findIndex(t=>+t===+h.t));
+  const all=pts.map((q,j)=>{const hs=idx.map(i=>hp(j,times[i],i));
+    return {...q,pf:hs.reduce((a,h)=>a+h.pf,0)/hs.length,c:hs.reduce((a,h)=>a+h.cl,0)/hs.length}})
+    .sort((a,b)=>b.pf-a.pf||a.c-b.c);
+  const spots=all.slice(0,5);
+  $("spots").innerHTML=spots.map(q=>'<tr><td>'+(q.d?q.n:"你的位置")+'</td><td>'+(q.d?q.d+" km":"0")+'</td><td><b>'+Math.round(q.pf)+'%</b></td><td>'+Math.round(q.c)+'%</td><td><a target="_blank" rel="noopener" href="https://www.google.com/maps?q='+q.la.toFixed(4)+','+q.lo.toFixed(4)+'">開啟</a></td></tr>').join("");
+  const spread=all[0].pf-all[all.length-1].pf;
+  $("spotnote").textContent=all[0].pf===0?"目前天色太亮，各點機率都接近 0，等天黑後再看。":
+    spread<5?"10 公里內各點機率差距很小（約 "+spread.toFixed(1)+" 個百分點），在原地看就好，不必特地移動。":
+    "最高與最低的點相差約 "+Math.round(spread)+" 個百分點，值得移動到排名前面的地點。";
+
+  $("out").hidden=false;
+  try{drawMap(all,lat,lon,lvl)}catch(e){console.error(e);$("map").style.display="none"}
+  $("status").innerHTML=["雲量","Kp","OVATION","Bz"].map(k=>'<span class="'+(st[k]?'ok':'bad')+'">'+(st[k]?"✓ ":"✗ ")+k+'</span>').join("")+'<span>更新 '+hhmm(new Date())+' UTC</span>';
+}
+run();
+</script>
+</body>
+</html>
