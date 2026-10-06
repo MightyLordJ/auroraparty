@@ -25,9 +25,11 @@ h2{font-size:1.05rem;margin:28px 0 10px}
 select,input,button{font:inherit;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px 12px}
 button{cursor:pointer}button:hover,button:focus-visible{border-color:var(--hi);outline:none}
 input{width:110px}
-.big{display:flex;align-items:baseline;gap:14px;margin:22px 0 4px}
+.big{display:flex;align-items:center;gap:14px;margin:22px 0 4px}
 .big b{font-size:4.2rem;line-height:1;font-weight:700}
-.big span{font-size:1.2rem}
+.big span{display:flex;flex-direction:column;line-height:1.35}
+.big span small{font-size:.85rem;color:var(--muted)}
+.big span strong{font-size:1.7rem;font-weight:700}
 .facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:14px 0}
 .fact{background:var(--panel);border-left:3px solid var(--line);padding:8px 12px;border-radius:4px}
 .fact small{display:block;color:var(--muted);font-size:.78rem}
@@ -88,7 +90,7 @@ a{color:var(--hi)}
 <script>
 const PLACES={"雷克雅維克":[64.147,-21.94],"辛格韋德利":[64.256,-21.13],"維克":[63.419,-19.006],"傑古沙龍冰河湖":[64.048,-16.179],"霍芬":[64.254,-15.209],"阿克雷里":[65.683,-18.1],"米湖":[65.6,-16.99],"胡薩維克":[66.045,-17.34],"斯奈山半島 斯蒂基斯霍爾米":[65.074,-22.73],"塞濟斯菲厄澤":[65.263,-14.0],"伊薩菲厄澤":[66.075,-23.135]};
 const $=id=>document.getElementById(id);
-const VERSION="V1.0.6";$("ver").textContent=VERSION;
+const VERSION="V1.0.7";$("ver").textContent=VERSION;
 const sel=$("preset");
 Object.keys(PLACES).forEach(k=>sel.add(new Option(k,k)));
 let cur={lat:0,lon:0};
@@ -179,10 +181,17 @@ async function run(){
   const ovs=pts.map(q=>ovAt(q.la,q.lo)),ov=ovs[0];
   if(ov!==null)st["OVATION"]=1;
 
-  // solar wind
-  let bz=null,spd=null;
-  if(bzR.status==="fulfilled"){const rows=bzR.value.slice(1).filter(r=>isFinite(parseFloat(r[3])));if(rows.length){bz=parseFloat(rows[rows.length-1][3]);st["Bz"]=1}}
-  if(spR.status==="fulfilled"){const rows=spR.value.slice(1).filter(r=>isFinite(parseFloat(r[2])));if(rows.length)spd=parseFloat(rows[rows.length-1][2])}
+  // solar wind (handles array-of-arrays or array-of-objects, with RTSW fallback)
+  const lastVal=(j,keys)=>{if(!Array.isArray(j)||!j.length)return null;let get;
+    if(Array.isArray(j[0])){const h=j[0].map(x=>String(x).toLowerCase());const ix=keys.map(k=>h.indexOf(k)).find(n=>n>=0);
+      if(ix===undefined)return null;get=r=>r[ix];j=j.slice(1)}
+    else get=r=>{for(const k of keys){if(r[k]!==undefined&&r[k]!==null)return r[k]}return null};
+    for(let n=j.length-1;n>=0;n--){const v=parseFloat(get(j[n]));if(isFinite(v))return v}return null};
+  let bz=bzR.status==="fulfilled"?lastVal(bzR.value,["bz_gsm","bz"]):null;
+  let spd=spR.status==="fulfilled"?lastVal(spR.value,["speed","proton_speed"]):null;
+  if(bz===null){try{bz=lastVal(await jget("https://services.swpc.noaa.gov/json/rtsw/rtsw_mag_1m.json"),["bz_gsm"])}catch(e){}}
+  if(spd===null){try{spd=lastVal(await jget("https://services.swpc.noaa.gov/json/rtsw/rtsw_wind_1m.json"),["proton_speed","speed"])}catch(e){}}
+  if(bz!==null)st["Bz"]=1;
 
   // weather per point
   const wx=Array.isArray(wxR.value)?wxR.value:[wxR.value];
@@ -204,7 +213,7 @@ async function run(){
   const h3=hours.slice(0,3),avg=Math.round(h3.reduce((s,h)=>s+h.p,0)/h3.length);
   const lvl=p=>p>=90?["極高",'var(--lo)']:p>=75?["很高",'var(--hi)']:p>=50?["中",'var(--mid)']:["低",'var(--g1)'];
   $("p3").textContent=avg+"%";$("p3").style.color=lvl(avg)[1];
-  $("p3l").textContent="未來 3 小時看見極光的機率：" + lvl(avg)[0];
+  $("p3l").innerHTML='<small>未來 3 小時看見極光的機率</small><strong style="color:'+lvl(avg)[1]+'">'+lvl(avg)[0]+'</strong>';
   const best=hours.reduce((a,b)=>b.p>a.p?b:a);
   $("p3d").textContent="最佳時段約 "+hhmm(best.t)+"（"+best.p+"%）。"+(h3.every(h=>h.df===0)?"目前天色太亮，要等天黑。":"");
 
