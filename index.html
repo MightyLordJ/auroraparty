@@ -16,7 +16,7 @@
 :root{--bg:#0e1a2b;--panel:#16263d;--line:#25405f;--text:#e8f1f2;--muted:#8ea3b5;--hi:#04FFB0;--mid:#19B4FF;--g1:#8095a9;--lo:#fbbf24;--no:#4b5d73}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--text);font:16px/1.6 "Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif}
-main{max-width:860px;margin:0 auto;padding:calc(20px + env(safe-area-inset-top,0px)) 16px calc(48px + env(safe-area-inset-bottom,0px))}
+main{max-width:860px;margin:0 auto;padding:calc(20px + env(safe-area-inset-top,0px)) 16px calc(110px + env(safe-area-inset-bottom,0px))}
 html{-webkit-text-size-adjust:100%}button{touch-action:manipulation}
 h1{font-size:1.4rem;margin:0 0 4px}
 h2{font-size:1.05rem;margin:28px 0 10px}
@@ -51,11 +51,21 @@ a{color:var(--hi)}
 #status span{margin-right:12px;font-size:.82rem}
 .ok{color:var(--hi)}.bad{color:#f87171}
 .ver{font-size:.75rem;font-weight:500;color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:1px 7px;margin-left:8px;vertical-align:middle}
-#map{height:380px;border-radius:10px;margin:0 0 12px;background:var(--panel)}
+#map{isolation:isolate;height:380px;border-radius:10px;margin:0 0 12px;background:var(--panel)}
 .pin{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font:700 11px system-ui,sans-serif;color:#0e1a2b;border:2px solid #fff;box-shadow:0 1px 4px #0008}
 .pin.best{box-shadow:0 0 0 4px #fff,0 1px 6px #000a}
 .pin.me{border-style:dashed;border-color:#0e1a2b}
 #ptr{position:fixed;top:calc(env(safe-area-inset-top,0px) + 8px);left:50%;transform:translate(-50%,-60px);opacity:0;background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:6px 16px;font-size:.85rem;color:var(--hi);z-index:9999;pointer-events:none}
+#rep{position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:2000;background:var(--hi);color:#0e1a2b;border:0;border-radius:28px;padding:13px 20px;font-weight:700;box-shadow:0 4px 14px #0009}
+#modal{position:fixed;inset:0;z-index:3000;background:#000a;display:flex;align-items:flex-end;justify-content:center}
+#modal[hidden]{display:none}
+#sheet{width:100%;max-width:520px;background:var(--bg);border:1px solid var(--line);border-radius:18px 18px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom,0px));max-height:92vh;overflow:auto}
+#sheet h3{margin:0 0 4px}
+.chips{display:flex;gap:8px;margin:10px 0 4px}.chips button{flex:1}.chips button.on{border-color:var(--hi);color:var(--hi)}
+.lv button{display:flex;flex-direction:column;align-items:flex-start;width:100%;margin:8px 0;border-left:5px solid var(--c);text-align:left}
+.lv b{color:var(--c);font-size:1.1rem}.lv small{color:var(--muted)}
+#cancel{width:100%;margin-top:6px}
+#toast{position:fixed;left:50%;bottom:calc(84px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--panel);border:1px solid var(--hi);color:var(--text);padding:8px 16px;border-radius:20px;z-index:4000;opacity:0;transition:opacity .25s;pointer-events:none}
 </style>
 </head>
 <body>
@@ -86,19 +96,41 @@ a{color:var(--hi)}
   <p class="note" id="spotnote"></p>
 </div>
 
+<details id="logbox"><summary id="logsum">回報紀錄</summary>
+  <p class="note" id="loglist"></p>
+  <div class="bar"><button id="syncnow">立即上傳</button><button id="copycsv">複製 CSV</button><button id="clearlog">清除全部</button></div>
+  <textarea id="csvbox" hidden readonly rows="6" style="width:100%;margin-top:8px"></textarea>
+</details>
+
 <h2>算法與限制</h2>
 <p class="note">機率 ＝ 極光活動 × 晴空比例 × 天黑程度。極光活動取自 NOAA OVATION 即時極光模型、Kp 預報、太陽風 Bz（Bz 往南利於極光）。晴空比例用總雲量與低雲量加權。這是經驗式估算，並非校準過的統計機率。<br>
 <span class="warn">限制：</span>雲量模型解析度約數公里，10 公里內各點差異通常很小，實際請看冰島氣象局 <a href="https://en.vedur.is/weather/forecasts/aurora/" target="_blank" rel="noopener">vedur.is 極光與雲量圖</a>確認。此估算未計入月光與光害，離開城鎮燈光會更好。</p>
 </main>
+<button id="rep">＋ 回報極光</button>
+<div id="toast"></div>
+<div id="modal" hidden><div id="sheet" role="dialog" aria-modal="true">
+  <h3>回報極光</h3>
+  <p class="note">只要出去找過就請回報，<b>沒看到也要記</b>，驗證才準。</p>
+  <div class="chips" id="sky"><button data-s="晴">晴</button><button data-s="多雲">多雲</button><button data-s="全陰">全陰</button></div>
+  <p class="note" style="margin:2px 0 6px">天空狀況（選填），再點下面的等級即送出</p>
+  <div class="lv">
+    <button data-l="0" style="--c:var(--g1)"><b>沒看到</b><small>有出去找，但沒有極光</small></button>
+    <button data-l="1" style="--c:var(--mid)"><b>微量</b><small>肉眼勉強可見的淡光，或相機才拍得到</small></button>
+    <button data-l="2" style="--c:var(--hi)"><b>清晰</b><small>肉眼明顯看到光帶</small></button>
+    <button data-l="3" style="--c:var(--lo)"><b>極光爆發</b><small>整片天空舞動，亮度與色彩強烈</small></button>
+  </div>
+  <button id="cancel">取消</button>
+</div></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
 const PLACES={"雷克雅維克":[64.147,-21.94],"辛格韋德利":[64.256,-21.13],"維克":[63.419,-19.006],"傑古沙龍冰河湖":[64.048,-16.179],"霍芬":[64.254,-15.209],"阿克雷里":[65.683,-18.1],"米湖":[65.6,-16.99],"胡薩維克":[66.045,-17.34],"斯奈山半島 斯蒂基斯霍爾米":[65.074,-22.73],"塞濟斯菲厄澤":[65.263,-14.0],"伊薩菲厄澤":[66.075,-23.135]};
 const $=id=>document.getElementById(id);
-const VERSION="V1.1.0";$("ver").textContent=VERSION;
+const VERSION="V1.3.0";$("ver").textContent=VERSION;
 const sel=$("preset");
 Object.keys(PLACES).forEach(k=>sel.add(new Option(k,k)));
 let cur={lat:0,lon:0};
+let snap=null;
 function fillPreset(){const [a,b]=PLACES[sel.value];cur={lat:a,lon:b}}
 sel.onchange=()=>{fillPreset();run()};fillPreset();
 
@@ -224,6 +256,7 @@ async function run(){
   const G="var(--g1)",M="var(--mid)",H="var(--hi)",Y="var(--lo)";
   const f=(l,v,c)=>'<div class="fact" style="border-left-color:'+c+'"><small>'+l+'</small><span style="color:'+c+'">'+v+'</span></div>';
   const k0=kpAt(now),cl0=Math.round(hours[0].cl);
+  snap={ts:Date.now(),t:new Date().toISOString(),lat,lon,p_now:hours[0].p,p3:avg,kp:k0,cloud:cl0,ov,bz,spd,el:+hours[0].el.toFixed(1)};
   const kc=k=>k===null?G:k>=7?Y:k>=5?H:k>=3?M:G;
   const cc=c=>c<=20?H:c<=50?M:G;
   const oc=o=>o===null?G:o>=70?Y:o>=40?H:o>=20?M:G;
@@ -253,10 +286,53 @@ async function run(){
   try{drawMap(all,lat,lon,lvl)}catch(e){console.error(e);$("map").style.display="none"}
   $("status").innerHTML=["雲量","Kp","OVATION","Bz"].map(k=>'<span class="'+(st[k]?'ok':'bad')+'">'+(st[k]?"✓ ":"✗ ")+k+'</span>').join("")+'<span>更新 '+hhmm(new Date())+' UTC</span>';
 }
+// ---- 回報功能 ----
+const KEY="aurora_reports_v1",LV=["沒看到","微量","清晰","極光爆發"];
+const COLS=["id","t","level","sky","lat","lon","gps","p_now","p3","kp","cloud","ov","bz","spd","el","snap_t"];
+const loadLog=()=>{try{return JSON.parse(localStorage.getItem(KEY)||"[]")}catch(e){return []}};
+const saveLog=a=>{try{localStorage.setItem(KEY,JSON.stringify(a));return true}catch(e){return false}};
+const ENDPOINT="https://script.google.com/macros/s/AKfycbwQzpjVpRLmRdGnhOvMNLmOFxrLZy8KqmDgXCbeyTKMSiUk_aqOyBLEXw0oixgOhf_G/exec";   // 貼上 Google Apps Script 網頁應用程式網址
+const TOKEN="jaxyaurora";      // 與 Apps Script 內的 TOKEN 相同
+let sky="",gpos=null,syncing=false;
+async function sync(manual){
+  if(!ENDPOINT){if(manual)toast("尚未設定上傳網址");return}
+  if(syncing)return;syncing=true;
+  const a=loadLog();let ch=false;
+  a.forEach(r=>{if(!r.id){r.id=r.t+"-"+Math.random().toString(36).slice(2,6);ch=true}});if(ch)saveLog(a);
+  const done=new Set();
+  for(const r of a){if(r.sent)continue;
+    try{await fetch(ENDPOINT,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({token:TOKEN,rec:r})});done.add(r.id)}catch(e){break}}
+  const b=loadLog();b.forEach(r=>{if(done.has(r.id))r.sent=1});saveLog(b);
+  syncing=false;renderLog();
+  if(manual)toast(done.size?"已上傳 "+done.size+" 筆":"沒有待上傳的紀錄，或網路不通");
+}
+function toast(m){const t=$("toast");t.textContent=m;t.style.opacity=1;setTimeout(()=>{t.style.opacity=0},2400)}
+function renderLog(){const a=loadLog();const u=a.filter(r=>!r.sent).length;$("logsum").textContent="回報紀錄（"+a.length+(ENDPOINT?"，待上傳 "+u:"")+"）";
+  $("loglist").innerHTML=a.slice(-8).reverse().map(r=>r.t.slice(5,16).replace("T"," ")+" UTC · <b>"+LV[r.level]+"</b>"+(r.sky?" · "+r.sky:"")+" · 預測 "+(r.p_now==null?"–":r.p_now+"%")+(r.sent?" ✓":"")).join("<br>")||"尚無紀錄"}
+function toCsv(a){return [COLS.join(",")].concat(a.map(r=>COLS.map(c=>{let v=r[c];if(v===undefined||v===null)v="";if(typeof v==="number"&&!Number.isInteger(v))v=+v.toFixed(3);return '"'+String(v).replace(/"/g,'""')+'"'}).join(","))).join("\n")}
+const clearSky=()=>document.querySelectorAll("#sky button").forEach(x=>x.classList.remove("on"));
+$("rep").onclick=()=>{sky="";gpos=null;clearSky();$("modal").hidden=false;
+  if(!snap||Date.now()-snap.ts>20*6e4)run();
+  if(navigator.geolocation)navigator.geolocation.getCurrentPosition(p=>{gpos={lat:p.coords.latitude,lon:p.coords.longitude}},()=>{},{timeout:4000,maximumAge:60000})};
+$("cancel").onclick=()=>{$("modal").hidden=true};
+$("modal").addEventListener("click",e=>{if(e.target.id==="modal")$("modal").hidden=true});
+document.querySelectorAll("#sky button").forEach(b=>b.onclick=()=>{const on=b.classList.contains("on");clearSky();if(on)sky="";else{b.classList.add("on");sky=b.dataset.s}});
+document.querySelectorAll(".lv button").forEach(b=>b.onclick=()=>{
+  const s=snap||{},g=gpos&&inIceland(gpos.lat,gpos.lon)?gpos:null;
+  const rec={id:new Date().toISOString()+"-"+Math.random().toString(36).slice(2,6),t:new Date().toISOString(),level:+b.dataset.l,sky,lat:g?g.lat:(s.lat??cur.lat),lon:g?g.lon:(s.lon??cur.lon),gps:g?1:0,
+    p_now:s.p_now,p3:s.p3,kp:s.kp,cloud:s.cloud,ov:s.ov,bz:s.bz,spd:s.spd,el:s.el,snap_t:s.t};
+  const a=loadLog();a.push(rec);const ok=saveLog(a);
+  $("modal").hidden=true;renderLog();toast(ok?"已記錄：「"+LV[rec.level]+"」":"儲存失敗，請稍後再試");sync()});
+$("syncnow").onclick=()=>sync(true);
+$("copycsv").onclick=async()=>{const x=toCsv(loadLog());
+  try{await navigator.clipboard.writeText(x);toast("已複製 CSV")}catch(e){const t=$("csvbox");t.hidden=false;t.value=x;t.select();toast("請手動複製下方文字")}};
+$("clearlog").onclick=()=>{if(confirm("確定清除所有回報紀錄？")){saveLog([]);renderLog()}};
+renderLog();sync();addEventListener("online",()=>sync());
+
 (function(){
   const ptr=$("ptr"),TH=70;let y0=null,dy=0,busy=false;
   const reset=()=>{ptr.style.transition="transform .2s,opacity .2s";ptr.style.opacity=0;ptr.style.transform="translate(-50%,-60px)"};
-  const ok=t=>!(t.closest&&t.closest("#map,select,input,summary"));
+  const ok=t=>!(t.closest&&t.closest("#map,select,input,summary,#sheet,#rep,#logbox"));
   addEventListener("touchstart",e=>{if(busy||window.scrollY>1||!ok(e.target)){y0=null;return}y0=e.touches[0].clientY;dy=0},{passive:true});
   addEventListener("touchmove",e=>{if(y0===null)return;dy=e.touches[0].clientY-y0;
     if(dy>0&&window.scrollY<=1){if(e.cancelable)e.preventDefault();const p=Math.min(dy*.5,90);
