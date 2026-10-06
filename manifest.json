@@ -1,0 +1,12 @@
+{
+  "name": "冰島極光通",
+  "short_name": "極光通",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0e1a2b",
+  "theme_color": "#0e1a2b",
+  "icons": [
+    { "src": "apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }
+  ]
+}
