@@ -120,23 +120,38 @@ a{color:var(--hi)}
 <script>
 const PLACES={"雷克雅維克":[64.147,-21.94],"辛格韋德利":[64.256,-21.13],"維克":[63.419,-19.006],"傑古沙龍冰河湖":[64.048,-16.179],"霍芬":[64.254,-15.209],"阿克雷里":[65.683,-18.1],"米湖":[65.6,-16.99],"胡薩維克":[66.045,-17.34],"斯奈山半島 斯蒂基斯霍爾米":[65.074,-22.73],"塞濟斯菲厄澤":[65.263,-14.0],"伊薩菲厄澤":[66.075,-23.135]};
 const $=id=>document.getElementById(id);
-const VERSION="V1.3.6";$("ver").textContent=VERSION;
+const VERSION="V1.4.0";$("ver").textContent=VERSION;
 const sel=$("preset");
 Object.keys(PLACES).forEach(k=>sel.add(new Option(k,k)));
 let cur={lat:0,lon:0};
 let snap=null;
-function fillPreset(){const [a,b]=PLACES[sel.value];cur={lat:a,lon:b}}
+let gps=null;
+function setGps(la,lo){gps={lat:la,lon:lo};if(![...sel.options].some(o=>o.value==="__gps"))sel.add(new Option("我的位置","__gps"),0);sel.value="__gps";cur={lat:la,lon:lo}}
+function fillPreset(){if(sel.value==="__gps"&&gps){cur={...gps};return}const p=PLACES[sel.value];if(p)cur={lat:p[0],lon:p[1]}}
 sel.onchange=()=>{fillPreset();run()};fillPreset();
+function saveLast(){try{localStorage.setItem("aurora_last",JSON.stringify({src:sel.value==="__gps"?"gps":"preset",name:sel.value,lat:cur.lat,lon:cur.lon}))}catch(e){}}
+function getTopic(){try{return localStorage.getItem("aurora_topic")||""}catch(e){return ""}}
+function postLoc(){const t=getTopic();if(!t||!ENDPOINT)return;
+  fetch(ENDPOINT,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({token:TOKEN,action:"loc",topic:t,lat:cur.lat,lon:cur.lon})}).catch(()=>{})}
+// 隱藏設定: 連點版本標籤 5 次, 輸入 ntfy 頻道名稱即可開啟通知 (朋友不會看到)
+let taps=0,tt=0;
+$("ver").onclick=()=>{const n=Date.now();taps=n-tt<1500?taps+1:1;tt=n;
+  if(taps>=5){taps=0;const v=prompt("通知頻道名稱（留空代表關閉通知）",getTopic());
+    if(v!==null){const t=v.trim();try{t?localStorage.setItem("aurora_topic",t):localStorage.removeItem("aurora_topic")}catch(e){}toast(t?"通知已設定":"通知已關閉");postLoc()}}};
 
 $("geo").onclick=()=>{
   if(!navigator.geolocation){return msg("此瀏覽器不支援定位，請選擇地點。")}
   navigator.geolocation.getCurrentPosition(p=>{
-    cur={lat:p.coords.latitude,lon:p.coords.longitude};run()},
+    setGps(p.coords.latitude,p.coords.longitude);run()},
     ()=>msg("定位失敗（開啟本機檔案時部分瀏覽器會封鎖）。請選擇地點。"),{timeout:8000});
 };
 function msg(t){$("status").innerHTML='<span class="bad">'+t+'</span>'}
 
 const inIceland=(la,lo)=>la>=63.2&&la<=66.7&&lo>=-24.8&&lo<=-13.2;
+(function(){let l=null;try{l=JSON.parse(localStorage.getItem("aurora_last")||"null")}catch(e){}
+  if(!l)return;
+  if(l.src==="gps"&&inIceland(l.lat,l.lon))setGps(l.lat,l.lon);
+  else if(PLACES[l.name]){sel.value=l.name;fillPreset()}})();
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 function sunEl(date,lat,lon){const r=Math.PI/180,d=date.getTime()/864e5+2440587.5-2451545;
   const g=(357.529+.98560028*d)*r,q=280.459+.98564736*d,L=(q+1.915*Math.sin(g)+.02*Math.sin(2*g))*r,e=(23.439-4e-7*d)*r;
@@ -251,6 +266,7 @@ async function run(){
   const f=(l,v,c)=>'<div class="fact" style="border-left-color:'+c+'"><small>'+l+'</small><span style="color:'+c+'">'+v+'</span></div>';
   const k0=kpAt(now),cl0=Math.round(hours[0].cl);
   snap={ts:Date.now(),t:new Date().toISOString(),lat,lon,p_now:hours[0].p,p3:avg,kp:k0,cloud:cl0,ov,bz,spd,el:+hours[0].el.toFixed(1)};
+  saveLast();postLoc();
   const kc=k=>k===null?G:k>=7?Y:k>=5?H:k>=3?M:G;
   const cc=c=>c<=20?H:c<=50?M:G;
   const oc=o=>o===null?G:o>=70?Y:o>=40?H:o>=20?M:G;
