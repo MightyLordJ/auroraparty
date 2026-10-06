@@ -33,6 +33,9 @@ input{width:110px}
 .facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:14px 0}
 .fact{background:var(--panel);border-left:3px solid var(--line);padding:8px 12px;border-radius:4px}
 .fact small{display:block;color:var(--muted);font-size:.78rem}
+.fact span{font-size:1.3rem;font-weight:600}
+details{margin:6px 0 0}summary{cursor:pointer;color:var(--muted);font-size:.9rem;padding:6px 0}
+details .facts{margin-top:6px}
 .chart{display:flex;gap:4px;align-items:flex-end;height:190px;background:var(--panel);padding:12px 10px 0;border-radius:10px;overflow-x:auto}
 .col{flex:1;min-width:38px;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%;font-size:.72rem;color:var(--muted)}
 .col .v{color:var(--text);font-size:.8rem;font-weight:600}
@@ -70,6 +73,7 @@ a{color:var(--hi)}
   <div class="big"><b id="p3">–</b><span id="p3l"></span></div>
   <p class="note" id="p3d"></p>
   <div class="facts" id="facts"></div>
+  <details><summary>進階數據</summary><div class="facts" id="facts2"></div></details>
 
   <h2>未來 12 小時機率</h2>
   <div class="chart" id="chart"></div>
@@ -90,7 +94,7 @@ a{color:var(--hi)}
 <script>
 const PLACES={"雷克雅維克":[64.147,-21.94],"辛格韋德利":[64.256,-21.13],"維克":[63.419,-19.006],"傑古沙龍冰河湖":[64.048,-16.179],"霍芬":[64.254,-15.209],"阿克雷里":[65.683,-18.1],"米湖":[65.6,-16.99],"胡薩維克":[66.045,-17.34],"斯奈山半島 斯蒂基斯霍爾米":[65.074,-22.73],"塞濟斯菲厄澤":[65.263,-14.0],"伊薩菲厄澤":[66.075,-23.135]};
 const $=id=>document.getElementById(id);
-const VERSION="V1.0.8";$("ver").textContent=VERSION;
+const VERSION="V1.0.9";$("ver").textContent=VERSION;
 const sel=$("preset");
 Object.keys(PLACES).forEach(k=>sel.add(new Option(k,k)));
 let cur={lat:0,lon:0};
@@ -217,11 +221,18 @@ async function run(){
   const best=hours.reduce((a,b)=>b.p>a.p?b:a);
   $("p3d").textContent="最佳時段約 "+hhmm(best.t)+"（"+best.p+"%）。"+(h3.every(h=>h.df===0)?"目前天色太亮，要等天黑。":"");
 
-  const f=(l,v)=>'<div class="fact"><small>'+l+'</small>'+v+'</div>';
-  const k0=kpAt(now);
-  $("facts").innerHTML=f("Kp 預報",k0!==null?k0.toFixed(1):"–")+f("OVATION 當地指數",ov!==null?ov+"%":"–")+
-    f("太陽風 Bz",bz!==null?bz.toFixed(1)+" nT"+(bz<-5?"（有利）":""):"–")+f("太陽風速度",spd!==null?Math.round(spd)+" km/s":"–")+
-    f("目前雲量（綜合）",Math.round(hours[0].cl)+"%");
+  const G="var(--g1)",M="var(--mid)",H="var(--hi)",Y="var(--lo)";
+  const f=(l,v,c)=>'<div class="fact" style="border-left-color:'+c+'"><small>'+l+'</small><span style="color:'+c+'">'+v+'</span></div>';
+  const k0=kpAt(now),cl0=Math.round(hours[0].cl);
+  const kc=k=>k===null?G:k>=7?Y:k>=5?H:k>=3?M:G;
+  const cc=c=>c<=20?H:c<=50?M:G;
+  const oc=o=>o===null?G:o>=70?Y:o>=40?H:o>=20?M:G;
+  const bc=b=>b===null?G:b<=-10?Y:b<=-5?H:b<0?M:G;
+  const sc=v=>v===null?G:v>=700?Y:v>=500?H:v>=400?M:G;
+  $("facts").innerHTML=f("Kp 預報",k0!==null?k0.toFixed(1):"–",kc(k0))+f("目前雲量（綜合）",cl0+"%",cc(cl0));
+  $("facts2").innerHTML=f("OVATION 頭頂指數",ov!==null?ov+"%":"–",oc(ov))+
+    f("太陽風 Bz",bz!==null?bz.toFixed(1)+" nT"+(bz<-5?"（有利）":""):"–",bc(bz))+
+    f("太陽風速度",spd!==null?Math.round(spd)+" km/s":"–",sc(spd));
 
   $("chart").innerHTML=hours.map(h=>{const c=lvl(h.p)[1];
     return '<div class="col"><span class="v">'+h.p+'%</span><div class="b'+(h.df===0?' dayx':'')+'" style="height:'+Math.max(h.p*1.15,3)+'px;'+(h.df===0?'':'background:'+c)+'"></div><span class="t">'+hhmm(h.t)+'<br>☁'+Math.round(h.cl)+'</span></div>'}).join("");
