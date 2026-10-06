@@ -86,7 +86,7 @@ a{color:var(--hi)}
   <div class="facts" id="facts"></div>
   <details><summary>進階數據</summary><div class="facts" id="facts2"></div></details>
 
-  <h2>未來 12 小時機率</h2>
+  <h2>本區未來 12 小時機率</h2>
   <div class="chart" id="chart"></div>
   <p class="note">斜紋＝天色太亮（太陽高度高於 −6°），幾乎看不到。柱下方為預測雲量。</p>
 
@@ -120,7 +120,7 @@ a{color:var(--hi)}
 <script>
 const PLACES={"雷克雅維克":[64.147,-21.94],"辛格韋德利":[64.256,-21.13],"維克":[63.419,-19.006],"傑古沙龍冰河湖":[64.048,-16.179],"霍芬":[64.254,-15.209],"阿克雷里":[65.683,-18.1],"米湖":[65.6,-16.99],"胡薩維克":[66.045,-17.34],"斯奈山半島 斯蒂基斯霍爾米":[65.074,-22.73],"塞濟斯菲厄澤":[65.263,-14.0],"伊薩菲厄澤":[66.075,-23.135]};
 const $=id=>document.getElementById(id);
-const VERSION="V1.3.4";$("ver").textContent=VERSION;
+const VERSION="V1.3.6";$("ver").textContent=VERSION;
 const sel=$("preset");
 Object.keys(PLACES).forEach(k=>sel.add(new Option(k,k)));
 let cur={lat:0,lon:0};
@@ -272,9 +272,13 @@ async function run(){
   const spots=all.slice(0,5);
   $("spots").innerHTML=spots.map(q=>'<tr><td>'+(q.d?q.n:"你的位置")+'</td><td>'+(q.d?q.d+" km":"0")+'</td><td><b>'+Math.round(q.pf)+'%</b></td><td>'+Math.round(q.c)+'%</td><td><a target="_blank" rel="noopener" href="https://www.google.com/maps?q='+q.la.toFixed(4)+','+q.lo.toFixed(4)+'">開啟</a></td></tr>').join("");
   const spread=all[0].pf-all[all.length-1].pf;
-  $("spotnote").textContent=all[0].pf===0?"目前天色太亮，各點機率都接近 0，等天黑後再看。":
-    spread<5?"20 公里內各點機率差距很小（約 "+spread.toFixed(1)+" 個百分點），在原地看就好，不必特地移動。":
-    "最高與最低的點相差約 "+Math.round(spread)+" 個百分點，值得移動到排名前面的地點。";
+  const soon=Math.max(hours[0].p,hours[1]?hours[1].p:0);
+  $("spotnote").textContent="目前狀況："+(
+    hours[0].df===0?"現在天色還太亮，附近各處的機率都接近 0，等天黑後再看。":
+    soon>=75?"本地在一小時內出現極光機率極高，建議停留觀看。":
+    spread>=15?"目前預測差距達到 15% 以上，建議前往上方排名前面的地點。":
+    spread<3?"目前指數差距在 3% 內代表兩地機率雷同，不用特地換地方，在原地看就好。":
+    "附近各處機率略有差異（約 "+Math.round(spread)+"%），原地觀看或稍微移動皆可。");
 
   $("out").hidden=false;
   try{drawMap(all,lat,lon,lvl)}catch(e){console.error(e);$("map").style.display="none"}
