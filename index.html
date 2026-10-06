@@ -90,21 +90,15 @@ a{color:var(--hi)}
   <div class="chart" id="chart"></div>
   <p class="note">斜紋＝天色太亮（太陽高度高於 −6°），幾乎看不到。柱下方為預測雲量。</p>
 
-  <h2>10 公里內極光機率最高的地點（未來 3 小時平均）</h2>
+  <h2>20 公里內極光機率最高的地點（未來 3 小時平均）</h2>
   <div id="map"></div>
   <table><thead><tr><th>方位</th><th>距離</th><th>機率</th><th>雲量</th><th>地圖</th></tr></thead><tbody id="spots"></tbody></table>
   <p class="note" id="spotnote"></p>
 </div>
 
-<details id="logbox"><summary id="logsum">回報紀錄</summary>
-  <p class="note" id="loglist"></p>
-  <div class="bar"><button id="syncnow">立即上傳</button><button id="copycsv">複製 CSV</button><button id="clearlog">清除全部</button></div>
-  <textarea id="csvbox" hidden readonly rows="6" style="width:100%;margin-top:8px"></textarea>
-</details>
-
 <h2>算法與限制</h2>
 <p class="note">機率 ＝ 極光活動 × 晴空比例 × 天黑程度。極光活動取自 NOAA OVATION 即時極光模型、Kp 預報、太陽風 Bz（Bz 往南利於極光）。晴空比例用總雲量與低雲量加權。這是經驗式估算，並非校準過的統計機率。<br>
-<span class="warn">限制：</span>雲量模型解析度約數公里，10 公里內各點差異通常很小，實際請看冰島氣象局 <a href="https://en.vedur.is/weather/forecasts/aurora/" target="_blank" rel="noopener">vedur.is 極光與雲量圖</a>確認。此估算未計入月光與光害，離開城鎮燈光會更好。</p>
+<span class="warn">限制：</span>雲量模型解析度約數公里，20 公里內各點差異可能仍然不大，實際請看冰島氣象局 <a href="https://en.vedur.is/weather/forecasts/aurora/" target="_blank" rel="noopener">vedur.is 極光與雲量圖</a>確認。此估算未計入月光與光害，離開城鎮燈光會更好。</p>
 </main>
 <button id="rep">極光互助會</button>
 <div id="toast"></div>
@@ -126,7 +120,7 @@ a{color:var(--hi)}
 <script>
 const PLACES={"雷克雅維克":[64.147,-21.94],"辛格韋德利":[64.256,-21.13],"維克":[63.419,-19.006],"傑古沙龍冰河湖":[64.048,-16.179],"霍芬":[64.254,-15.209],"阿克雷里":[65.683,-18.1],"米湖":[65.6,-16.99],"胡薩維克":[66.045,-17.34],"斯奈山半島 斯蒂基斯霍爾米":[65.074,-22.73],"塞濟斯菲厄澤":[65.263,-14.0],"伊薩菲厄澤":[66.075,-23.135]};
 const $=id=>document.getElementById(id);
-const VERSION="V1.3.3";$("ver").textContent=VERSION;
+const VERSION="V1.3.4";$("ver").textContent=VERSION;
 const sel=$("preset");
 Object.keys(PLACES).forEach(k=>sel.add(new Option(k,k)));
 let cur={lat:0,lon:0};
@@ -168,8 +162,8 @@ function drawMap(all,lat,lon,lvl){
       L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:17,attribution:"© OpenStreetMap"}).addTo(map)}});
     layer=L.layerGroup().addTo(map)}
   layer.clearLayers();
-  L.circle([lat,lon],{radius:10000,color:"#3EFFDB",weight:1.5,fill:false}).addTo(layer);
-  L.circle([lat,lon],{radius:5000,color:"#3EFFDB",weight:1,dashArray:"4 6",fill:false}).addTo(layer);
+  L.circle([lat,lon],{radius:20000,color:"#3EFFDB",weight:1.5,fill:false}).addTo(layer);
+  L.circle([lat,lon],{radius:10000,color:"#3EFFDB",weight:1,dashArray:"4 6",fill:false}).addTo(layer);
   all.forEach((q,i)=>{
     const cls="pin"+(i===0?" best":"")+(q.d===0?" me":"");
     const ic=L.divIcon({className:"",iconSize:[34,34],iconAnchor:[17,17],
@@ -178,7 +172,7 @@ function drawMap(all,lat,lon,lvl){
       "<b>"+(q.d?q.n+" "+q.d+" km":"你的位置")+"</b><br>極光機率 "+Math.round(q.pf)+"%<br>雲量 "+Math.round(q.c)+"%<br>"+
       '<a target="_blank" rel="noopener" href="https://www.google.com/maps?q='+q.la.toFixed(4)+","+q.lo.toFixed(4)+'">在 Google 地圖開啟</a>');
   });
-  const dla=11/111.2,dlo=11/(111.2*Math.cos(lat*Math.PI/180));
+  const dla=22/111.2,dlo=22/(111.2*Math.cos(lat*Math.PI/180));
   map.fitBounds([[lat-dla,lon-dlo],[lat+dla,lon+dlo]]);
   setTimeout(()=>map.invalidateSize(),50);
 }
@@ -191,7 +185,7 @@ async function run(){
   // sample points
   const pts=[{n:"中心",d:0,la:lat,lo:lon}];
   const dirs=["北","東北","東","東南","南","西南","西","西北"];
-  [5,10].forEach(km=>dirs.forEach((nm,i)=>{const a=i*Math.PI/4;
+  [10,20].forEach(km=>dirs.forEach((nm,i)=>{const a=i*Math.PI/4;
     pts.push({n:nm,d:km,la:lat+km*Math.cos(a)/111.2,lo:lon+km*Math.sin(a)/(111.2*Math.cos(lat*Math.PI/180))})}));
   const [kpR,ovR,bzR,spR,wxR]=await Promise.allSettled([
     jget("https://services.swpc.noaa.gov/products/noaa-planetary-k-index-forecast.json"),
@@ -279,7 +273,7 @@ async function run(){
   $("spots").innerHTML=spots.map(q=>'<tr><td>'+(q.d?q.n:"你的位置")+'</td><td>'+(q.d?q.d+" km":"0")+'</td><td><b>'+Math.round(q.pf)+'%</b></td><td>'+Math.round(q.c)+'%</td><td><a target="_blank" rel="noopener" href="https://www.google.com/maps?q='+q.la.toFixed(4)+','+q.lo.toFixed(4)+'">開啟</a></td></tr>').join("");
   const spread=all[0].pf-all[all.length-1].pf;
   $("spotnote").textContent=all[0].pf===0?"目前天色太亮，各點機率都接近 0，等天黑後再看。":
-    spread<5?"10 公里內各點機率差距很小（約 "+spread.toFixed(1)+" 個百分點），在原地看就好，不必特地移動。":
+    spread<5?"20 公里內各點機率差距很小（約 "+spread.toFixed(1)+" 個百分點），在原地看就好，不必特地移動。":
     "最高與最低的點相差約 "+Math.round(spread)+" 個百分點，值得移動到排名前面的地點。";
 
   $("out").hidden=false;
@@ -310,13 +304,10 @@ async function sync(manual){
       try{await fetch(ENDPOINT,{method:"POST",mode:"no-cors",headers:H,body});done.set(r.id,2)}catch(e2){err="網路不通";break}
     }}
   const b=loadLog();b.forEach(r=>{if(done.has(r.id))r.sent=done.get(r.id)});saveLog(b);
-  syncing=false;renderLog();
-  if(err)toast(err);else if(manual)toast(done.size?"已上傳 "+done.size+" 筆":"沒有待上傳的紀錄");
+  syncing=false;
+  if(manual)toast(err||(done.size?"已上傳 "+done.size+" 筆":"沒有待上傳的紀錄"));
 }
 function toast(m){const t=$("toast");t.textContent=m;t.style.opacity=1;setTimeout(()=>{t.style.opacity=0},2400)}
-function renderLog(){const a=loadLog();const u=a.filter(r=>!r.sent).length;$("logsum").textContent="回報紀錄（"+a.length+(ENDPOINT?"，待上傳 "+u:"")+"）";
-  $("loglist").innerHTML=a.slice(-8).reverse().map(r=>r.t.slice(5,16).replace("T"," ")+" UTC · <b>"+LV[r.level]+"</b>"+(r.sky?" · "+r.sky:"")+" · 預測 "+(r.p_now==null?"–":r.p_now+"%")+(r.sent===1?" ✓":r.sent===2?" ?":"")).join("<br>")||"尚無紀錄"}
-function toCsv(a){return [COLS.join(",")].concat(a.map(r=>COLS.map(c=>{let v=r[c];if(v===undefined||v===null)v="";if(typeof v==="number"&&!Number.isInteger(v))v=+v.toFixed(3);return '"'+String(v).replace(/"/g,'""')+'"'}).join(","))).join("\n")}
 const clearSky=()=>document.querySelectorAll("#sky button").forEach(x=>x.classList.remove("on"));
 $("rep").onclick=()=>{sky="";gpos=null;clearSky();$("modal").hidden=false;
   if(!snap||Date.now()-snap.ts>20*6e4)run();
@@ -329,12 +320,8 @@ document.querySelectorAll(".lv button").forEach(b=>b.onclick=()=>{
   const rec={id:new Date().toISOString()+"-"+Math.random().toString(36).slice(2,6),t:new Date().toISOString(),level:+b.dataset.l,sky,lat:g?g.lat:(s.lat??cur.lat),lon:g?g.lon:(s.lon??cur.lon),gps:g?1:0,
     p_now:s.p_now,p3:s.p3,kp:s.kp,cloud:s.cloud,ov:s.ov,bz:s.bz,spd:s.spd,el:s.el,snap_t:s.t};
   const a=loadLog();a.push(rec);const ok=saveLog(a);
-  $("modal").hidden=true;renderLog();toast(ok?"已記錄：「"+LV[rec.level]+"」":"儲存失敗，請稍後再試");sync()});
-$("syncnow").onclick=()=>sync(true);
-$("copycsv").onclick=async()=>{const x=toCsv(loadLog());
-  try{await navigator.clipboard.writeText(x);toast("已複製 CSV")}catch(e){const t=$("csvbox");t.hidden=false;t.value=x;t.select();toast("請手動複製下方文字")}};
-$("clearlog").onclick=()=>{if(confirm("確定清除所有回報紀錄？")){saveLog([]);renderLog()}};
-renderLog();sync();addEventListener("online",()=>sync());
+  $("modal").hidden=true;toast(ok?"已記錄：「"+LV[rec.level]+"」":"儲存失敗，請稍後再試");sync()});
+sync();addEventListener("online",()=>sync());
 
 (function(){
   const ptr=$("ptr"),TH=70;let y0=null,dy=0,busy=false;
