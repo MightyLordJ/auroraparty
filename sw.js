@@ -1,5 +1,5 @@
 // 每次改版請同步更新 CACHE_NAME 與 index.html 內的 VERSION
-const CACHE_NAME = "aurora-shell-v2";
+const CACHE_NAME = "aurora-shell-v3";
 const SHELL = ["./", "index.html", "manifest.json", "apple-touch-icon.png"];
 
 self.addEventListener("install", e => {
@@ -18,7 +18,7 @@ self.addEventListener("fetch", e => {
   const req = e.request;
   if (req.method !== "GET" || new URL(req.url).origin !== location.origin) return;
   e.respondWith(
-    fetch(req).then(res => {
+    fetch(req,{cache:"no-cache"}).then(res => {
       const copy = res.clone();
       caches.open(CACHE_NAME).then(c => c.put(req, copy));
       return res;
