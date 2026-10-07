@@ -96,10 +96,8 @@ a{color:var(--hi)}
   <p class="note" id="spotnote"></p>
 
   <div id="outlook">
-    <h2>未來幾天 Kp 預報</h2>
-    <div class="chart" id="kpchart"></div>
-    <p class="note">每根柱子是 3 小時的預報 Kp，深色＝冰島時間 18:00 至隔天 03:00 的適合時段，淺色＝其他時間；柱下為時間、預報雲量、日期。</p>
-    <table><thead><tr><th>夜晚（18:00–03:00）</th><th>最高 Kp</th><th>平均雲量</th></tr></thead><tbody id="nights"></tbody></table>
+    <h2>未來幾天最高 Kp 預報</h2>
+    <table><thead><tr><th>最高 Kp 的預報時段</th><th>最高 Kp</th><th>該時段雲量</th></tr></thead><tbody id="nights"></tbody></table>
     <p class="note" id="kpnote"></p>
   </div>
 </div>
@@ -128,7 +126,7 @@ a{color:var(--hi)}
 <script>
 const PLACES={"雷克雅維克":[64.147,-21.94],"辛格韋德利":[64.256,-21.13],"維克":[63.419,-19.006],"傑古沙龍冰河湖":[64.048,-16.179],"霍芬":[64.254,-15.209],"阿克雷里":[65.683,-18.1],"米湖":[65.6,-16.99],"胡薩維克":[66.045,-17.34],"斯奈山半島 斯蒂基斯霍爾米":[65.074,-22.73],"塞濟斯菲厄澤":[65.263,-14.0],"伊薩菲厄澤":[66.075,-23.135]};
 const $=id=>document.getElementById(id);
-const VERSION="V1.5.0";$("ver").textContent=VERSION;
+const VERSION="V1.5.1";$("ver").textContent=VERSION;
 const sel=$("preset");
 Object.keys(PLACES).forEach(k=>sel.add(new Option(k,k)));
 let cur={lat:0,lon:0};
@@ -184,17 +182,15 @@ async function outlook(kp,lat,lon,kc){
   const cloudOf=t=>{const v=[0,1,2].map(i=>cl[t.getTime()+i*36e5]).filter(x=>x!==undefined);return v.length?v.reduce((a,b)=>a+b,0)/v.length:null};
   const cc=c=>c<=20?"var(--hi)":c<=50?"var(--mid)":"var(--g1)";
   const md=d=>(d.getUTCMonth()+1)+"/"+d.getUTCDate();
-  const isNight=h=>h>=18||h<=2;
   const nights={};
-  $("kpchart").innerHTML=rows.map(x=>{
-    const h=x.t.getUTCHours(),n=isNight(h),c=cloudOf(x.t);
+  rows.forEach(x=>{
+    const h=x.t.getUTCHours();if(!(h>=18||h<=2))return;          // 只看夜間時段 (UTC 18:00–02:59)
     const key=h<=2?md(new Date(x.t.getTime()-864e5)):md(x.t);
-    if(n){const g=nights[key]||(nights[key]={kp:0,cl:[]});g.kp=Math.max(g.kp,x.kp);if(c!==null)g.cl.push(c)}
-    return '<div class="col"><span class="v">'+x.kp.toFixed(1)+'</span><div class="b" style="height:'+Math.max(x.kp/9*125,3)+'px;background:'+kc(x.kp)+';opacity:'+(n?1:.35)+'"></div><span class="t">'+hhmm(x.t)+'<br>'+(c===null?'':'☁'+Math.round(c))+'<br>'+md(x.t)+'</span></div>'}).join("");
-  $("nights").innerHTML=Object.keys(nights).map(k=>{const g=nights[k],c=g.cl.length?g.cl.reduce((a,b)=>a+b,0)/g.cl.length:null;
-    return '<tr><td>'+k+'</td><td style="color:'+kc(g.kp)+';font-weight:600">'+g.kp.toFixed(1)+'</td><td style="color:'+(c===null?'var(--muted)':cc(c))+'">'+(c===null?'–':Math.round(c)+'%')+'</td></tr>'}).join("")||'<tr><td colspan="3">這段時間沒有夜間預報資料</td></tr>';
+    if(!nights[key]||x.kp>nights[key].kp)nights[key]={kp:x.kp,t:x.t,c:cloudOf(x.t)}});
+  $("nights").innerHTML=Object.keys(nights).map(k=>{const g=nights[k],e=new Date(g.t.getTime()+3*36e5);
+    return '<tr><td>'+md(g.t)+' '+hhmm(g.t)+'–'+hhmm(e)+'</td><td style="color:'+kc(g.kp)+';font-weight:600">'+g.kp.toFixed(1)+'</td><td style="color:'+(g.c===null?'var(--muted)':cc(g.c))+'">'+(g.c===null?'–':Math.round(g.c)+'%')+'</td></tr>'}).join("")||'<tr><td colspan="3">這段時間沒有夜間預報資料</td></tr>';
   const last=rows[rows.length-1].t;
-  $("kpnote").textContent="NOAA 的 Kp 預報只到 "+md(last)+" "+hhmm(last)+"（UTC）為止，更遠的日子沒有資料。越遠的預報越不準，雲量預報也一樣。Kp 高不代表看得到，仍要搭配雲量與天黑。";
+  $("kpnote").textContent="每個夜晚（冰島時間 18:00 至隔天 03:00）取預報 Kp 最高的 3 小時時段。NOAA 的 Kp 預報只到 "+md(last)+" "+hhmm(last)+" 為止，更遠的日子沒有資料；越遠的預報越不準，雲量預報也一樣。Kp 高不代表看得到，仍要搭配雲量。";
 }
 
 let map=null,layer=null;

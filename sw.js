@@ -1,5 +1,5 @@
 // 每次改版請同步更新 CACHE_NAME 與 index.html 內的 VERSION
-const CACHE_NAME = "aurora-shell-v15";
+const CACHE_NAME = "aurora-shell-v16";
 const SHELL = ["./", "index.html", "manifest.json", "apple-touch-icon.png"];
 
 self.addEventListener("install", e => {
